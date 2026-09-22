@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Biryani Center — Order Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/ui.css">
+<style>
+  .kc-grid { display: block; width: 100%; height: 76px; border-radius: var(--radius-sm); background: var(--brain-bg); }
+  .valence { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2); align-items: center; }
+  .valence-bar {
+    height: 6px; background: var(--bg2); border-radius: 3px; position: relative; overflow: hidden;
+  }
+  .valence-bar i {
+    position: absolute; top: 0; bottom: 0; left: 50%; width: 0;
+    background: var(--mint); transition: width .5s var(--ease), left .5s var(--ease), background .3s var(--ease);
+  }
+  .valence-bar.neg i { background: var(--danger); }
+  .valence-num { font-variant-numeric: tabular-nums; font-size: .82rem; min-width: 3.4rem; text-align: right; }
+  .order-summary {
+    font-family: var(--font-display); font-size: 1.02rem; color: var(--ink);
+    text-transform: capitalize; line-height: 1.3;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <h1 class="brand">Biryani <span>Center</span><small>order desk</small></h1>
+    <nav class="route-nav">
+      <a href="orders.html" class="active">Order desk</a>
+      <a href="kitchen.html">Kitchen</a>
+    </nav>
+    <div class="stats">
+      <span>placed <strong id="s-placed">0</strong></span>
+      <span>served <strong id="s-served">0</strong></span>
+      <span>kitchen <strong id="s-link">offline</strong></span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <section class="stage">
+      <div class="stage-head">
+        <span>the fly on the phone</span>
+        <span><b id="s-mode">taking orders</b></span>
+      </div>
+      <div class="stage-body"><canvas id="deskgl"></canvas></div>
+      <div class="hud" id="deskhud">loading the fly&hellip;</div>
+    </section>
+
+    <section class="panel">
+      <div class="tabs" id="tabs">
+        <button data-tab="order" class="active">order</button>
+        <button data-tab="queue">queue</button>
+        <button data-tab="learned">learned</button>
+      </div>
+
+      <div class="tab-body" data-body="order">
+        <div class="field">
+          <label>protein</label>
+          <div class="chips" data-opt="protein"></div>
+        </div>
+        <div class="field">
+          <label>style</label>
+          <div class="chips" data-opt="style"></div>
+        </div>
+        <div class="field">
+          <label>spice</label>
+          <div class="chips" data-opt="spice"></div>
+        </div>
+        <div class="field">
+          <label>side</label>
+          <div class="chips" data-opt="side"></div>
+        </div>
+
+        <div class="field">
+          <label>what she smells &mdash; the Kenyon-cell code for this order</label>
+          <canvas class="kc-grid" id="kc"></canvas>
+        </div>
+
+        <div class="field">
+          <label>how she feels about it</label>
+          <div class="valence">
+            <div class="valence-bar" id="vbar"><i></i></div>
+            <span class="valence-num" id="vnum">0.00</span>
+          </div>
+        </div>
+
+        <p class="order-summary" id="summary">&mdash;</p>
+        <button class="primary" id="place">Place order</button>
+        <p class="note" id="placehint" style="border:0;padding:0;color:var(--mint)"></p>
+        <p class="note" id="ordernote"></p>
+      </div>
+
+      <div class="tab-body" data-body="queue" hidden>
+        <div class="ticket-list" id="queue"><p class="empty">Nothing in the kitchen yet.</p></div>
+      </div>
+
+      <div class="tab-body" data-body="learned" hidden>
+        <p class="note">
+          Every served ticket rewards the order's Kenyon-cell code; every remake punishes it.
+          Only the synapses from cells that were <i>active for that order</i> move, so what she
+          learns is specific to the order and not a global mood.
+        </p>
+        <div id="learnlist" class="ticket-list"><p class="empty">She has not learned anything yet.</p></div>
+        <div class="row">
+          <button class="ghost" id="forget">Forget everything</button>
+          <span class="ticket-stage">depression <b id="depr">0.0%</b></span>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+            "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { createFly, animateFly } from './src/fly.js';
+import { MushroomBody } from './src/mb.js';
+import { MENU, orderKey, orderLabel, stageLabel, RECIPE } from './src/recipe.js';
+import { Bus, MSG } from './src/bus.js';
+import * as store from './src/store.js';
+
+// ---------------------------------------------------------------- the brain
+// One mushroom body: this desk fly's. She is the only fly on this page.
+const mb = new MushroomBody();
+
+// ---------------------------------------------------------------- the order
+const choice = { protein: 'chicken', style: 'hyderabadi', spice: 'medium', side: 'raita' };
+let kc = null;
+
+for (const [group, values] of Object.entries(MENU)) {
+  const host = document.querySelector(`[data-opt="${group}"]`);
+  for (const v of values) {
+    const b = document.createElement('button');
+    b.textContent = v;
+    b.className = choice[group] === v ? 'on' : '';
+    b.onclick = () => {
+      choice[group] = v;
+      for (const sib of host.children) sib.className = sib.textContent === v ? 'on' : '';
+      refresh();
+    };
+    host.appendChild(b);
+  }
+}
+
+const kcCanvas = document.getElementById('kc');
+const kcCtx = kcCanvas.getContext('2d');
+
+function drawKc() {
+  const dpr = Math.min(devicePixelRatio, 2);
+  const w = kcCanvas.clientWidth, h = kcCanvas.clientHeight;
+  kcCanvas.width = w * dpr; kcCanvas.height = h * dpr;
+  kcCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  kcCtx.clearRect(0, 0, w, h);
+  const n = mb.nKc, cols = 40, rows = Math.ceil(n / cols);
+  const cw = w / cols, ch = h / rows;
+  for (let i = 0; i < n; i++) {
+    const x = (i % cols) * cw, y = ((i / cols) | 0) * ch;
+    const a = kc ? kc[i] : 0;
+    if (a > 0) {
+      kcCtx.fillStyle = `rgba(212,163,90,${0.25 + a * 0.75})`;
+      kcCtx.fillRect(x + 0.5, y + 0.5, cw - 1, ch - 1);
+    } else {
+      kcCtx.fillStyle = 'rgba(255,255,255,0.045)';
+      kcCtx.fillRect(x + 0.5, y + 0.5, cw - 1, ch - 1);
+    }
+  }
+}
+
+function refresh() {
+  const key = orderKey(choice);
+  kc = mb.kcFor(mb.pnFor(key));
+  const v = mb.valence(kc);
+  const active = [...kc].filter((x) => x > 0).length;
+  drawKc();
+  const bar = document.getElementById('vbar');
+  const i = bar.querySelector('i');
+  bar.classList.toggle('neg', v < 0);
+  i.style.width = `${Math.abs(v) * 50}%`;
+  i.style.left = v < 0 ? `${50 - Math.abs(v) * 50}%` : '50%';
+  document.getElementById('vnum').textContent = (v >= 0 ? '+' : '') + v.toFixed(2);
+  document.getElementById('summary').textContent = orderLabel(choice);
+  document.getElementById('ordernote').innerHTML =
+    `<b>${active}</b> of ${mb.nKc} Kenyon cells fire for this order — a sparse code, the way an
+     odour is represented in a real mushroom body. That code <i>is</i> the ticket: the kitchen
+     flies are driven by it, not by the words.`;
+}
+
+// ---------------------------------------------------------------- the bus
+const bus = new Bus('desk');
+let placed = 0, servedCount = 0, kitchenSeen = 0;
+
+document.getElementById('place').onclick = () => {
+  const key = orderKey(choice);
+  const entry = { order: { ...choice, key, label: orderLabel(choice) }, kc: Array.from(kc) };
+  // Storage first, then the nudge. If the kitchen is not open yet -- which is
+  // the normal case when you navigate there in this same tab -- the order waits
+  // for it rather than being broadcast into nothing.
+  store.pushOrder(entry);
+  bus.send(MSG.ORDER, entry);
+  placed++;
+  document.getElementById('s-placed').textContent = placed;
+  flash();
+};
+
+/**
+ * Outcomes teach this fly: a served ticket rewards that order's code, a remake
+ * punishes it, and only the cells active for that order move.
+ *
+ * Events come from storage rather than only from the live channel, so a ticket
+ * that finished while this page was closed still teaches her when it reopens.
+ */
+function applyEvents(events) {
+  if (!events.length) return;
+  for (const ev of events) {
+    const row = learned.get(ev.key) || { key: ev.key, label: ev.label, served: 0, remade: 0 };
+    if (ev.kind === 'served') row.served++; else row.remade++;
+    learned.set(ev.key, row);
+  }
+  replayLearning();
+  renderLearned();
+  refresh();
+}
+
+/**
+ * Rebuild the circuit from the tally of outcomes.
+ *
+ * The weights themselves are never stored -- the counts are, and they are
+ * replayed through the same teach() calls. Because the rule is deterministic
+ * and forget() restores the naive circuit exactly, the result is precisely the
+ * circuit those outcomes would have produced had the page never been closed.
+ */
+function replayLearning() {
+  mb.forget();
+  for (const row of learned.values()) {
+    const code = mb.kcFor(mb.pnFor(row.key));
+    for (let i = 0; i < row.served; i++) mb.teach(code, +1);
+    for (let i = 0; i < row.remade; i++) mb.teach(code, -1);
+    row.valence = mb.valence(code);
+  }
+  store.saveLearned([...learned.values()]);
+}
+
+bus.on(MSG.HELLO, () => { kitchenSeen = Date.now(); });
+bus.on(MSG.STATE, (st) => {
+  kitchenSeen = Date.now();
+  renderQueue(st.tickets || []);
+  servedCount = (st.tickets || []).filter((t) => t.done).length;
+  document.getElementById('s-served').textContent = servedCount;
+});
+
+// Storage is the durable path; the channel is only a nudge. Polling it covers
+// the case where the kitchen tab is backgrounded and its messages are throttled.
+setInterval(() => applyEvents(store.drainEvents()), 1200);
+
+setInterval(() => {
+  const el = document.getElementById('s-link');
+  const waiting = store.pendingCount();
+  if (Date.now() - kitchenSeen < 4000) el.textContent = 'live';
+  // A background tab has its rAF loop and timers throttled, so a kitchen that
+  // is open but not visible genuinely stops simulating. That is not the same as
+  // not being open, and "offline" for it would be misleading.
+  else if (kitchenSeen) el.textContent = 'idle (tab hidden)';
+  else el.textContent = waiting ? `${waiting} waiting` : 'not open';
+
+  const hint = document.getElementById('placehint');
+  if (hint) {
+    hint.textContent = Date.now() - kitchenSeen < 4000
+      ? ''
+      : waiting
+        ? `${waiting} order${waiting > 1 ? 's' : ''} waiting. Open the Kitchen and the flies start on ${waiting > 1 ? 'them' : 'it'}.`
+        : '';
+  }
+}, 1500);
+
+function renderQueue(tickets) {
+  const host = document.getElementById('queue');
+  if (!tickets.length) { host.innerHTML = '<p class="empty">Nothing in the kitchen yet.</p>'; return; }
+  host.innerHTML = '';
+  for (const t of tickets.slice().reverse().slice(0, 14)) {
+    const el = document.createElement('div');
+    el.className = 'ticket ' + (t.done ? 'served' : t.spoiled ? 'spoiled' : 'working');
+    const pct = t.done ? 100 : Math.round((t.step / RECIPE.length) * 100);
+    el.innerHTML = `<div class="ticket-top">
+        <span class="ticket-id">${t.id}</span>
+        <span class="ticket-stage">${t.stage}${t.remakes ? ` · ${t.remakes} remake${t.remakes > 1 ? 's' : ''}` : ''}</span>
+      </div>
+      <div class="ticket-label">${t.label}</div>
+      <div class="ticket-bar"><i style="width:${pct}%"></i></div>`;
+    host.appendChild(el);
+  }
+}
+
+const learned = new Map();
+function renderLearned() {
+  const host = document.getElementById('learnlist');
+  const rows = [...learned.values()].sort((a, b) => b.valence - a.valence);
+  if (!rows.length) { host.innerHTML = '<p class="empty">She has not learned anything yet.</p>'; return; }
+  host.innerHTML = '';
+  for (const r of rows) {
+    const el = document.createElement('div');
+    el.className = 'ticket ' + (r.valence > 0.1 ? 'served' : r.valence < -0.1 ? 'spoiled' : '');
+    el.innerHTML = `<div class="ticket-top">
+        <span class="ticket-label">${r.label}</span>
+        <span class="ticket-id">${r.valence >= 0 ? '+' : ''}${r.valence.toFixed(2)}</span>
+      </div>
+      <div class="ticket-stage">${r.served} served · ${r.remade} remade</div>`;
+    host.appendChild(el);
+  }
+  document.getElementById('depr').textContent = (mb.depression * 100).toFixed(1) + '%';
+}
+
+document.getElementById('forget').onclick = () => {
+  mb.forget();
+  learned.clear();
+  store.saveLearned([]);
+  renderLearned();
+  refresh();
+};
+
+// ---- restore whatever the last session left behind
+for (const row of store.loadLearned()) learned.set(row.key, row);
+if (learned.size) replayLearning();
+applyEvents(store.drainEvents());
+{
+  const last = store.loadState();
+  if (last) {
+    renderQueue(last.tickets || []);
+    servedCount = (last.tickets || []).filter((t) => t.done).length;
+    document.getElementById('s-served').textContent = servedCount;
+  }
+}
+
+// ---------------------------------------------------------------- tabs
+document.getElementById('tabs').onclick = (e) => {
+  const b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  for (const x of document.querySelectorAll('#tabs button')) x.classList.toggle('active', x === b);
+  for (const body of document.querySelectorAll('[data-body]')) body.hidden = body.dataset.body !== b.dataset.tab;
+  if (b.dataset.tab === 'order') drawKc();
+};
+
+// ---------------------------------------------------------------- 3D
+const canvas = document.getElementById('deskgl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x14110e);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
+camera.position.set(2.42, 1.80, 2.98);
+camera.lookAt(0.18, 0.48, 0.14);
+
+scene.add(new THREE.HemisphereLight(0xffe6c0, 0x1a1410, 0.75));
+const key = new THREE.DirectionalLight(0xffd9a0, 1.5);
+key.position.set(5, 8, 4);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x6fa892, 0.5);
+rim.position.set(-6, 2, -4);
+scene.add(rim);
+
+// the desk
+const desk = new THREE.Mesh(
+  new THREE.CylinderGeometry(2.3, 2.45, 0.3, 48),
+  new THREE.MeshStandardMaterial({ color: 0x2a231c, roughness: 0.85 }));
+desk.position.y = -0.18;
+scene.add(desk);
+
+// the phone: a rounded slab with a canvas screen
+const screen = document.createElement('canvas');
+screen.width = 512; screen.height = 1024;
+const sctx = screen.getContext('2d');
+const screenTex = new THREE.CanvasTexture(screen);
+screenTex.colorSpace = THREE.SRGBColorSpace;
+
+function drawScreen(flashOn) {
+  const w = screen.width, h = screen.height;
+  sctx.fillStyle = '#14110e'; sctx.fillRect(0, 0, w, h);
+
+  // header
+  sctx.fillStyle = '#221c16'; sctx.fillRect(0, 0, w, 132);
+  sctx.fillStyle = '#d4a35a';
+  sctx.font = '600 52px "DM Sans", system-ui, sans-serif';
+  sctx.fillText('Biryani Center', 36, 84);
+
+  // the order, as a slip
+  sctx.fillStyle = '#8a7a68';
+  sctx.font = '500 30px "DM Sans", system-ui, sans-serif';
+  sctx.fillText('NEW ORDER', 36, 196);
+
+  let y = 266;
+  for (const [g, v] of Object.entries(choice)) {
+    sctx.fillStyle = '#6d6151';
+    sctx.font = '500 30px "DM Sans", system-ui, sans-serif';
+    sctx.fillText(g.toUpperCase(), 36, y);
+    sctx.fillStyle = '#f3ebe0';
+    sctx.font = '600 44px "DM Sans", system-ui, sans-serif';
+    sctx.fillText(v, 36, y + 50);
+    y += 108;
+  }
+
+  // what she smells, on the phone too
+  sctx.fillStyle = '#6d6151';
+  sctx.font = '500 26px "DM Sans", system-ui, sans-serif';
+  sctx.fillText('KENYON-CELL CODE', 36, y + 6);
+  if (kc) {
+    const cols = 25, cw = (w - 72) / cols, ch = 12;
+    for (let i = 0; i < mb.nKc; i++) {
+      const a = kc[i];
+      sctx.fillStyle = a > 0 ? `rgba(212,163,90,${0.35 + a * 0.65})` : 'rgba(255,255,255,0.055)';
+      sctx.fillRect(36 + (i % cols) * cw, y + 30 + ((i / cols) | 0) * ch, cw - 2, ch - 2);
+    }
+  }
+
+  // send button
+  sctx.fillStyle = flashOn ? '#6fa892' : '#3d3228';
+  sctx.fillRect(36, h - 152, w - 72, 104);
+  sctx.fillStyle = flashOn ? '#14110e' : '#b5a694';
+  sctx.font = '600 44px "DM Sans", system-ui, sans-serif';
+  const label = flashOn ? 'SENT TO KITCHEN' : 'PLACE ORDER';
+  sctx.fillText(label, (w - sctx.measureText(label).width) / 2, h - 86);
+  screenTex.needsUpdate = true;
+}
+
+const phone = new THREE.Group();
+const slab = new THREE.Mesh(
+  new THREE.BoxGeometry(0.78, 1.5, 0.05),
+  new THREE.MeshStandardMaterial({ color: 0x15120f, roughness: 0.4, metalness: 0.5 }));
+phone.add(slab);
+const glass = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.72, 1.42),
+  new THREE.MeshBasicMaterial({ map: screenTex }));
+glass.position.z = 0.03;
+phone.add(glass);
+// The fly faces +X (assets/fly/NOTICE), so the phone goes at +X of her,
+// propped at 58 deg: steep enough for her to be looking at it, tipped enough
+// toward the camera to be readable.
+phone.position.set(0.74, 0.30, 0.30);
+phone.rotation.set(-1.0, -0.22, 0.0);
+scene.add(phone);
+
+let flashUntil = 0;
+function flash() { flashUntil = performance.now() + 1100; }
+
+const fly = await createFly('assets/fly');
+fly.scale.setScalar(0.38);
+fly.position.set(-0.36, 0.02, -0.02);
+fly.rotation.y = 0;                     // facing +X, at the phone
+scene.add(fly);
+
+const hud = document.getElementById('deskhud');
+function resize() {
+  const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', () => { resize(); drawKc(); });
+
+let last = performance.now(), fps = 0;
+renderer.setAnimationLoop(() => {
+  const now = performance.now();
+  const dt = (now - last) / 1000; last = now;
+  fps += (1 / Math.max(dt, 1e-4) - fps) * 0.08;
+  const on = now < flashUntil;
+  // head tipped down at the screen the whole time; she lifts slightly and
+  // beats her wings while an order is going out
+  animateFly(fly, now / 1000, on ? 0.45 : 0.04, { head: on ? 16 : 24 });
+  fly.position.x = -0.36 + (on ? 0.05 : 0);
+  fly.position.z = -0.02 + (on ? Math.sin(now / 90) * 0.015 : 0);
+  phone.rotation.z = Math.sin(now / 1400) * 0.01;
+  drawScreen(on);
+  renderer.render(scene, camera);
+  document.getElementById('s-mode').textContent = on ? 'dispatching' : 'taking orders';
+  hud.innerHTML = `<b>${fps.toFixed(0)}</b> fps &middot; mushroom body
+    <b>${mb.counts.kc}</b> KC / <b>${mb.counts.mbon}</b> MBON &middot;
+    learning rule is real, this MB's wiring is a sized stand-in`;
+});
+
+resize();
+refresh();
+bus.send(MSG.HELLO, { role: 'desk' });
+setInterval(() => bus.send(MSG.HELLO, { role: 'desk' }), 2000);
+</script>
+</body>
+</html>

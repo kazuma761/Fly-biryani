@@ -1,0 +1,205 @@
+/* House palette. Carried over from flinge-main, which already reads as a spice
+   palette: gold is saffron, rose is chilli, mint is raita. */
+:root {
+  --bg0: #14110e;
+  --bg1: #1e1914;
+  --bg2: #2a231c;
+  --surface: #221c16;
+  --surface-2: #2c241c;
+  --line: #3d3228;
+  --line-soft: #2f2820;
+  --ink: #f3ebe0;
+  --muted: #b5a694;
+  --gold: #d4a35a;
+  --gold-deep: #9a7030;
+  --rose: #c76b52;
+  --mint: #6fa892;
+  --danger: #d45445;
+  --brain-bg: #05070d;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-body: "DM Sans", "Avenir Next", system-ui, sans-serif;
+  --space-1: .25rem; --space-2: .5rem; --space-3: .75rem;
+  --space-4: 1rem;   --space-5: 1.5rem; --space-6: 2rem;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+html { scrollbar-color: var(--line) var(--bg0); scrollbar-width: thin; }
+
+body {
+  font-family: var(--font-body);
+  color: var(--ink);
+  line-height: 1.45;
+  background-color: var(--bg0);
+  background-image:
+    radial-gradient(ellipse 90% 55% at 8% -10%, #3a2818 0%, transparent 58%),
+    radial-gradient(ellipse 55% 40% at 100% 0%, #1a2a24 0%, transparent 48%),
+    linear-gradient(180deg, #17130f 0%, #100e0c 100%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: color-mix(in srgb, var(--gold) 45%, #1a1410); color: var(--ink); }
+button { font-family: inherit; cursor: pointer; }
+button:focus-visible, a:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--gold) 70%, white); outline-offset: 2px;
+}
+
+.app { max-width: 1320px; margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-6); }
+
+/* ---- top bar ---- */
+.topbar {
+  display: grid; grid-template-columns: auto 1fr auto;
+  align-items: center; gap: var(--space-4); margin-bottom: var(--space-4);
+}
+.brand {
+  font-family: var(--font-display); font-weight: 600; font-size: 1.32rem;
+  margin: 0; letter-spacing: -0.01em;
+}
+.brand span { color: var(--gold); }
+.brand small {
+  display: block; font-family: var(--font-body); font-weight: 400;
+  font-size: .72rem; color: var(--muted); letter-spacing: .04em; text-transform: uppercase;
+}
+.route-nav { display: flex; gap: var(--space-2); justify-self: center; }
+.route-nav a {
+  color: var(--muted); text-decoration: none; font-size: .82rem;
+  padding: .32rem .7rem; border-radius: 999px; border: 1px solid transparent;
+  transition: color .18s var(--ease), border-color .18s var(--ease), background .18s var(--ease);
+}
+.route-nav a:hover { color: var(--ink); }
+.route-nav a.active {
+  color: var(--gold); border-color: var(--line); background: var(--surface);
+}
+.stats { display: flex; gap: var(--space-4); font-size: .78rem; color: var(--muted); }
+.stats strong { color: var(--gold); font-variant-numeric: tabular-nums; }
+
+/* ---- layout: 3D stage left, panel right ---- */
+.layout { display: grid; grid-template-columns: 1.45fr 1fr; gap: var(--space-4); align-items: stretch; }
+.layout-wide { grid-template-columns: 1.75fr 1fr; }
+
+.stage, .panel {
+  background: var(--surface); border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+.stage { position: relative; display: flex; flex-direction: column; }
+/* The canvas MUST be absolutely positioned inside .stage-body.
+   With `height: 100%` in normal flow, the percentage resolves against an
+   auto-height flex parent, which resolves against the canvas's own attribute
+   height -- which the renderer sets from clientHeight every resize. That is a
+   feedback loop, and the canvas grows without bound (measured: 198,000 px tall)
+   until nothing renders in the visible sliver. Absolute + inset:0 takes the
+   size from the positioned parent instead and breaks the cycle. */
+.stage canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+.stage-body { flex: 1 1 auto; min-height: clamp(400px, 56vh, 660px); position: relative; }
+
+.stage-head, .panel-head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: .76rem; color: var(--muted); letter-spacing: .05em; text-transform: uppercase;
+}
+.stage-head b, .panel-head b { color: var(--ink); font-weight: 600; }
+
+/* HUD over the 3D */
+.hud {
+  position: absolute; left: var(--space-4); bottom: var(--space-3);
+  font-size: .72rem; color: var(--muted); line-height: 1.6;
+  text-shadow: 0 1px 6px #000; pointer-events: none; font-variant-numeric: tabular-nums;
+}
+.hud b { color: var(--gold); }
+
+/* ---- the section tabs (the flinge pattern) ---- */
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--line-soft); padding: 0 var(--space-3); }
+.tabs button {
+  background: none; border: 0; border-bottom: 2px solid transparent;
+  color: var(--muted); padding: var(--space-3) var(--space-3);
+  font-size: .8rem; text-transform: capitalize; letter-spacing: .02em;
+  transition: color .18s var(--ease), border-color .18s var(--ease);
+}
+.tabs button:hover { color: var(--ink); }
+.tabs button.active { color: var(--gold); border-bottom-color: var(--gold); }
+.tab-body { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+/* [hidden] alone loses to display:flex, so the tab bodies would all show at once. */
+.tab-body[hidden] { display: none; }
+
+/* ---- controls ---- */
+.field { display: flex; flex-direction: column; gap: var(--space-2); }
+.field > label {
+  font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em;
+}
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chips button {
+  background: var(--bg1); border: 1px solid var(--line-soft); color: var(--muted);
+  padding: .38rem .72rem; border-radius: 999px; font-size: .8rem;
+  transition: all .18s var(--ease);
+}
+.chips button:hover { color: var(--ink); border-color: var(--line); }
+.chips button.on {
+  background: color-mix(in srgb, var(--gold) 16%, var(--bg1));
+  border-color: var(--gold-deep); color: var(--gold);
+}
+button.primary {
+  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-deep) 100%);
+  border: 0; color: #1a1209; font-weight: 600; font-size: .88rem;
+  padding: .7rem 1rem; border-radius: var(--radius-md);
+  transition: filter .18s var(--ease), transform .18s var(--ease);
+}
+button.primary:hover { filter: brightness(1.08); }
+button.primary:active { transform: translateY(1px); }
+button.primary:disabled { filter: grayscale(.6) brightness(.7); cursor: not-allowed; }
+button.ghost {
+  background: transparent; border: 1px solid var(--line); color: var(--muted);
+  padding: .46rem .8rem; border-radius: var(--radius-sm); font-size: .8rem;
+  transition: all .18s var(--ease);
+}
+button.ghost:hover { color: var(--ink); border-color: var(--gold-deep); }
+button.ghost.on { color: var(--mint); border-color: var(--mint); }
+.row { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+
+/* ---- tickets ---- */
+.ticket-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.ticket {
+  background: var(--bg1); border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--line); border-radius: var(--radius-sm);
+  padding: var(--space-3); font-size: .82rem;
+  transition: border-color .25s var(--ease), background .25s var(--ease);
+}
+.ticket.working { border-left-color: var(--gold); }
+.ticket.served  { border-left-color: var(--mint); opacity: .72; }
+.ticket.spoiled { border-left-color: var(--danger); }
+.ticket-top { display: flex; justify-content: space-between; gap: var(--space-2); align-items: baseline; }
+.ticket-id { font-variant-numeric: tabular-nums; color: var(--gold); font-weight: 600; font-size: .76rem; }
+.ticket-label { color: var(--ink); text-transform: capitalize; }
+.ticket-stage { font-size: .72rem; color: var(--muted); }
+.ticket-bar { height: 3px; background: var(--bg2); border-radius: 2px; margin-top: var(--space-2); overflow: hidden; }
+.ticket-bar i {
+  display: block; height: 100%; background: var(--gold);
+  transition: width .4s var(--ease);
+}
+.ticket.served .ticket-bar i { background: var(--mint); }
+
+/* ---- meters ---- */
+.meter { display: grid; grid-template-columns: 7.5rem 1fr 3.6rem; gap: var(--space-2); align-items: center; font-size: .76rem; }
+.meter-name { color: var(--muted); font-variant-numeric: tabular-nums; }
+.meter-bar { height: 4px; background: var(--bg2); border-radius: 2px; overflow: hidden; }
+.meter-bar i { display: block; height: 100%; background: var(--mint); width: 0; transition: width .12s linear; }
+.meter-val { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.note {
+  font-size: .74rem; color: var(--muted); line-height: 1.55;
+  border-top: 1px solid var(--line-soft); padding-top: var(--space-3); margin: 0;
+}
+.note b { color: var(--ink); font-weight: 600; }
+.note i { color: var(--gold); font-style: normal; }
+.empty { color: var(--muted); font-size: .8rem; margin: 0; }
+
+@media (max-width: 1000px) {
+  .layout, .layout-wide { grid-template-columns: 1fr; }
+  .topbar { grid-template-columns: 1fr; gap: var(--space-3); }
+  .route-nav, .stats { justify-self: start; }
+}

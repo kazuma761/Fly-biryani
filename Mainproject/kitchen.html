@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Biryani Center — Kitchen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/ui.css">
+<style>
+  .rows { display: flex; flex-direction: column; gap: var(--space-4); }
+  .brain-stage .stage-body { min-height: clamp(320px, 42vh, 520px); background: var(--brain-bg); }
+  .crew-row {
+    display: grid; grid-template-columns: 2.2rem 1fr 4.2rem; gap: var(--space-2);
+    align-items: center; font-size: .76rem; padding: .28rem 0;
+  }
+  .crew-id { color: var(--gold); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .crew-what { color: var(--muted); }
+  .crew-hz { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .crew-hz.on { color: var(--mint); }
+  /* Inside .stage-body, not .stage -- as a child of .stage its top:16px landed
+     on top of the "THE BRAIN, LIVE" header. */
+  .narrate {
+    position: absolute; left: var(--space-4); top: var(--space-3); max-width: 62%;
+    font-size: .78rem; line-height: 1.5; text-shadow: 0 1px 8px #000; pointer-events: none;
+    z-index: 2;
+  }
+  .narrate b { color: var(--gold); display: block; font-size: .9rem; }
+  .narrate span { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <h1 class="brand">Biryani <span>Center</span><small>kitchen floor</small></h1>
+    <nav class="route-nav">
+      <a href="orders.html">Order desk</a>
+      <a href="kitchen.html" class="active">Kitchen</a>
+    </nav>
+    <div class="stats">
+      <span>working <strong id="s-work">0</strong></span>
+      <span>served <strong id="s-served">0</strong></span>
+      <span>remakes <strong id="s-remake">0</strong></span>
+      <span>desk <strong id="s-link">offline</strong></span>
+    </div>
+  </header>
+
+  <div class="rows">
+    <div class="layout layout-wide">
+      <section class="stage">
+        <div class="stage-head">
+          <span>the floor</span>
+          <span><b id="s-crew">0</b> flies on <b id="s-open">0</b> tickets</span>
+        </div>
+        <div class="stage-body"><canvas id="kgl"></canvas></div>
+        <div class="hud" id="khud">loading&hellip;</div>
+      </section>
+
+      <section class="panel">
+        <div class="tabs" id="tabs">
+          <button data-tab="tickets" class="active">tickets</button>
+          <button data-tab="crew">crew</button>
+          <button data-tab="controls">controls</button>
+        </div>
+        <div class="tab-body" data-body="tickets">
+          <div class="ticket-list" id="tickets"><p class="empty">No orders. Place one at the order desk.</p></div>
+        </div>
+        <div class="tab-body" data-body="crew" hidden>
+          <div id="crew"></div>
+          <p class="note">
+            A fly works a station only when its own readout neuron is firing. Arriving at the
+            rice boiler drives that fly's real <i>LB3a</i> water cells; about 25&nbsp;ms of
+            simulated time later <i>DNg67</i> fires, and that firing is what commits a tick of
+            work. A quiet readout stalls the step even though the body is standing there.
+          </p>
+        </div>
+        <div class="tab-body" data-body="controls" hidden>
+          <div class="row">
+            <button class="ghost" id="pause">Pause</button>
+            <button class="ghost" id="lesion">Lesion sensory cells</button>
+            <button class="ghost" id="scramble">Scramble wiring</button>
+            <button class="ghost" id="spin">Spin brain</button>
+          </div>
+          <p class="note">
+            These are the controls, and they are part of the product rather than a test script.
+            <b>Lesion</b> silences every station's sensory cells: the flies still fly to their
+            stations and then stand there, because nothing reaches a motor neuron.
+            <b>Scramble</b> rewires the graph degree-preservingly &mdash; each neuron keeps its
+            out-degree and its weights, but they land on random partners &mdash; which is what
+            shows the measured <i>structure</i> is doing the work and not just the cell count.
+          </p>
+          <div class="field">
+            <label>pathway trace</label>
+            <div class="chips" id="paths"></div>
+          </div>
+          <p class="note" id="pathnote"></p>
+        </div>
+      </section>
+    </div>
+
+    <div class="layout layout-wide">
+      <section class="stage brain-stage">
+        <div class="stage-head">
+          <span>the brain, live</span>
+          <span><b id="s-neurons">0</b> somas &middot; <b id="s-spikes">0</b> spikes</span>
+        </div>
+        <div class="stage-body">
+          <canvas id="bgl"></canvas>
+          <div class="narrate" id="narrate"></div>
+        </div>
+        <div class="hud" id="bhud"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><span>readouts</span><span><b id="s-sim">0.0</b> s brain time</span></div>
+        <div class="tab-body" id="meters"></div>
+        <p class="note" style="margin:0 var(--space-4) var(--space-4)">
+          <b>150 neurons, 2,224 synapses</b> of MaleCNS&nbsp;v1.0 &mdash; four traced
+          sensory&rarr;motor routes, real contact counts. 66 of those cells have no soma in the
+          cloud above: a labellar taste cell or an olfactory receptor neuron keeps its cell body
+          out in the labellum or the antenna, outside the brain volume, and sends only its axon
+          in. They appear in the pathway traces and are absent from the point cloud, which is
+          anatomy rather than a loading failure.
+        </p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+            "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { createSimpleFly, animateSimpleFly } from './src/fly.js';
+import { BrainView } from './src/brainview.js';
+import { loadConnectome, PATHWAYS, MEANS } from './src/circuit.js';
+import { Crew } from './src/crew.js';
+import { STATIONS, STATION, RECIPE, makeTicket, currentStep, stepTicket, stageLabel } from './src/recipe.js';
+import { Bus, MSG } from './src/bus.js';
+import * as store from './src/store.js';
+
+const CREW_SIZE = 6;
+const TICK_EVERY = 0.5;           // seconds of wall clock per pipeline tick
+
+// ---------------------------------------------------------------- the brain
+const co = await loadConnectome('data');
+const crew = new Crew(co, CREW_SIZE);
+document.getElementById('s-crew').textContent = CREW_SIZE;
+
+// ---------------------------------------------------------------- the floor 3D
+const kcanvas = document.getElementById('kgl');
+const krend = new THREE.WebGLRenderer({ canvas: kcanvas, antialias: true });
+krend.setPixelRatio(Math.min(devicePixelRatio, 2));
+krend.setClearColor(0x14110e);
+const kscene = new THREE.Scene();
+// Framed for a hexagon of radius 4 plus a 1.15 station pad plus the label
+// sprites: about 5.6 units of half-extent, at 46 deg vertical FOV.
+const kcam = new THREE.PerspectiveCamera(46, 1, 0.1, 300);
+kcam.position.set(0, 7.5, 8.9);
+kcam.lookAt(0, 0.2, 0);
+
+kscene.add(new THREE.HemisphereLight(0xffe6c0, 0x1a1410, 0.7));
+const klight = new THREE.DirectionalLight(0xffd9a0, 1.35);
+klight.position.set(6, 12, 6);
+kscene.add(klight);
+const krim = new THREE.DirectionalLight(0x6fa892, 0.45);
+krim.position.set(-8, 4, -6);
+kscene.add(krim);
+
+// floor
+const floor = new THREE.Mesh(
+  new THREE.CircleGeometry(7.2, 64),
+  new THREE.MeshStandardMaterial({ color: 0x1e1914, roughness: 0.94 }));
+floor.rotation.x = -Math.PI / 2;
+kscene.add(floor);
+
+// stations
+const stationMesh = {};
+const labelCanvases = {};
+for (const s of STATIONS) {
+  const g = new THREE.Group();
+  const pad = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.05, 1.15, 0.22, 32),
+    new THREE.MeshStandardMaterial({ color: 0x2a231c, roughness: 0.8 }));
+  g.add(pad);
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(1.05, 0.035, 8, 48),
+    new THREE.MeshBasicMaterial({ color: s.colour, transparent: true, opacity: 0.45 }));
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.13;
+  g.add(ring);
+  const vessel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.46, 0.38, 0.5, 24),
+    new THREE.MeshStandardMaterial({ color: s.colour, roughness: 0.55, metalness: 0.25 }));
+  vessel.position.y = 0.36;
+  g.add(vessel);
+
+  // label as a sprite so it always faces the camera
+  const lc = document.createElement('canvas');
+  lc.width = 360; lc.height = 90;
+  labelCanvases[s.id] = lc;
+  const tex = new THREE.CanvasTexture(lc);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sprite.scale.set(3.0, 0.75, 1);
+  sprite.position.set(0, 1.5, 0);
+  g.add(sprite);
+
+  g.position.set(s.pos[0], 0, s.pos[1]);
+  kscene.add(g);
+  stationMesh[s.id] = { group: g, ring, vessel, tex, sprite };
+  drawLabel(s.id, 0);
+}
+
+function drawLabel(id, busy) {
+  const s = STATION[id];
+  const c = labelCanvases[id], x = c.getContext('2d');
+  x.clearRect(0, 0, c.width, c.height);
+  x.font = '600 34px "DM Sans", system-ui, sans-serif';
+  x.fillStyle = busy ? '#f3ebe0' : '#9a8a76';
+  x.fillText(s.label, 6, 38);
+  x.font = '500 25px "DM Sans", system-ui, sans-serif';
+  x.fillStyle = busy ? '#d4a35a' : '#6a5f52';
+  x.fillText(busy ? `${busy} on it` : 'free', 6, 74);
+  stationMesh[id].tex.needsUpdate = true;
+}
+
+/**
+ * Passers-by.
+ *
+ * Four extra flies that are not crew and have no brain -- they just cross the
+ * room on long arcs, at height, and respawn off the far edge. They exist so the
+ * floor is never completely still between tickets. They never touch a station
+ * and are excluded from every count in the UI, because they are scenery.
+ */
+const AMBIENT = 4;
+const ambient = [];
+for (let i = 0; i < AMBIENT; i++) {
+  const m = await createSimpleFly('assets/fly');
+  m.scale.setScalar(0.11 + Math.random() * 0.04);
+  kscene.add(m);
+  ambient.push({ mesh: m, t: Math.random() * 1000, speed: 0, from: null, to: null, y: 0, arc: 0 });
+  respawnAmbient(ambient[i], Math.random());      // stagger their starts
+}
+
+function respawnAmbient(a, progress = 0) {
+  const edge = 9.5;
+  const angle = Math.random() * Math.PI * 2;
+  const spread = (Math.PI * 0.55) + Math.random() * Math.PI * 0.5;
+  a.from = { x: Math.cos(angle) * edge, z: Math.sin(angle) * edge };
+  a.to = { x: Math.cos(angle + spread) * edge, z: Math.sin(angle + spread) * edge };
+  a.t = progress;
+  a.speed = 0.035 + Math.random() * 0.045;        // fraction of the crossing per second
+  a.y = 1.9 + Math.random() * 1.9;
+  a.arc = (Math.random() < 0.5 ? -1 : 1) * (1.4 + Math.random() * 2.2);
+}
+
+function stepAmbient(dt, t) {
+  for (const a of ambient) {
+    a.t += dt * a.speed;
+    if (a.t >= 1) { respawnAmbient(a); continue; }
+    // quadratic bow, so the path across the room curves instead of being a line
+    const u = a.t;
+    const bow = Math.sin(u * Math.PI) * a.arc;
+    const dx = a.to.x - a.from.x, dz = a.to.z - a.from.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const x = a.from.x + dx * u + (-dz / len) * bow;
+    const z = a.from.z + dz * u + ( dx / len) * bow;
+
+    const prev = a.mesh.position;
+    const vx = x - prev.x, vz = z - prev.z;
+    a.mesh.position.set(x, a.y + Math.sin(t * 3 + a.arc) * 0.12, z);
+    if (Math.hypot(vx, vz) > 1e-4) {
+      const want = Math.atan2(vx, vz);
+      let turn = want - a.mesh.rotation.y;
+      while (turn > Math.PI) turn -= Math.PI * 2;
+      while (turn < -Math.PI) turn += Math.PI * 2;
+      a.mesh.rotation.y += turn * 0.2;
+      animateSimpleFly(a.mesh, t, { bank: Math.max(-30, Math.min(30, turn * 90)), pitch: -12 });
+    }
+  }
+}
+
+// the handi, carried between stations once layering starts
+const handi = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.56, 0.44, 0.62, 28),
+  new THREE.MeshStandardMaterial({ color: 0xb5643a, roughness: 0.45, metalness: 0.35 }));
+handi.visible = false;
+kscene.add(handi);
+
+// flies
+const flyMeshes = {};
+for (const f of crew.flies) {
+  const m = await createSimpleFly('assets/fly');
+  m.scale.setScalar(0.17);
+  kscene.add(m);
+  flyMeshes[f.id] = m;
+}
+
+// ---------------------------------------------------------------- the brain 3D
+const brain = await new BrainView(document.getElementById('bgl'), 'data').load();
+brain.spin = false;   // still by default; the Spin button turns it on
+document.getElementById('s-neurons').textContent = brain.nSoma.toLocaleString();
+
+// row -> soma point index, once. Rows whose cell has no soma here are dropped
+// and counted, rather than silently mapped to point 0.
+const rowToPoint = new Int32Array(co.topology.n).fill(-1);
+let mappedRows = 0;
+for (let r = 0; r < co.topology.n; r++) {
+  const p = brain.pointOf.get(co.graph.nodes[r].bodyId);
+  if (p !== undefined) { rowToPoint[r] = p; mappedRows++; }
+}
+
+// readout meters
+const meterEls = {};
+{
+  const host = document.getElementById('meters');
+  for (const [key, s] of Object.entries(co.stimuli)) {
+    const el = document.createElement('div');
+    el.className = 'meter';
+    el.innerHTML = `<span class="meter-name">${s.readout}</span>
+      <span class="meter-bar"><i></i></span><span class="meter-val">0 Hz</span>`;
+    host.appendChild(el);
+    meterEls[s.readout] = { bar: el.querySelector('i'), val: el.querySelector('.meter-val'), smooth: 0 };
+  }
+}
+
+// pathway trace buttons
+{
+  const host = document.getElementById('paths');
+  for (const k of PATHWAYS) {
+    const b = document.createElement('button');
+    b.textContent = k;
+    b.onclick = async () => {
+      for (const x of host.children) x.classList.toggle('on', x === b);
+      const p = await brain.playPathway(k);
+      document.getElementById('pathnote').innerHTML =
+        `<b>${p.meta.neurons.length}</b> neurons, <b>${p.last} ms</b> end to end,
+         ${p.meta.stimulusTypes.join(' + ')} &rarr; ${p.meta.readout}.
+         Each cell lights at the millisecond it <i>actually first fired</i>. The travel along a
+         branch is drawn, not measured &mdash; the model's neurons are points with no internal
+         geometry.`;
+    };
+    host.appendChild(b);
+  }
+  const off = document.createElement('button');
+  off.textContent = 'off';
+  off.onclick = () => {
+    for (const x of host.children) x.classList.remove('on');
+    brain.hidePathway();
+    document.getElementById('pathnote').textContent = '';
+    document.getElementById('narrate').innerHTML = '';
+  };
+  host.appendChild(off);
+}
+brain.onPathStep = (step, ms) => {
+  const n = document.getElementById('narrate');
+  const sub = step.kind === 'readout'
+    ? `${MEANS[step.text.split(' ')[0]] || 'the brain issues a command'} — ${step.ms} ms after the stimulus began`
+    : step.kind === 'sensory' ? 'the sensory input' : 'relay neurons carrying the signal onward';
+  n.innerHTML = `<b>${step.text}</b><span>${sub}</span>`;
+};
+
+// ---------------------------------------------------------------- pipeline
+const tickets = [];
+let served = 0, remakes = 0, paused = false, tickAcc = 0;
+const pendingEvents = [];
+
+const bus = new Bus('kitchen');
+let deskSeen = 0;
+
+/** Take everything waiting in the durable queue. */
+function takePending() {
+  for (const p of store.drainOrders()) {
+    tickets.push(makeTicket(p.order, Float32Array.from(p.kc || [])));
+  }
+}
+// A live nudge just means "look now" -- the order itself is already in storage,
+// so a nudge that arrives twice, or never, changes nothing.
+bus.on(MSG.ORDER, takePending);
+bus.on(MSG.HELLO, () => { deskSeen = Date.now(); publish(); });
+
+function publish() {
+  const snapshot = {
+    tickets: tickets.slice(-20).map((t) => ({
+      id: t.id, label: t.order.label, stage: stageLabel(t), step: t.step,
+      done: t.done, spoiled: t.spoiled, remakes: t.remakes || 0,
+    })),
+    events: [],
+    stats: { served, remakes },
+  };
+  // Outcomes go to storage so the desk can learn from them even if it was not
+  // open when the ticket finished; the live copy is just for a desk that IS open.
+  const events = pendingEvents.splice(0);
+  store.pushEvents(events);
+  store.saveState(snapshot);
+  bus.send(MSG.STATE, { ...snapshot, events });
+}
+takePending();
+setInterval(takePending, 1000);
+setInterval(publish, 900);
+setInterval(() => bus.send(MSG.HELLO, { role: 'kitchen' }), 2000);
+setInterval(() => {
+  const el = document.getElementById('s-link');
+  el.textContent = Date.now() - deskSeen < 4000 ? 'live'
+                 : deskSeen ? 'idle (tab hidden)' : 'offline';
+}, 1500);
+
+function pipelineTick() {
+  crew.dispatch(tickets, currentStep);
+  for (const t of tickets) {
+    if (t.done) continue;
+    const ev = stepTicket(t, (id, st) => crew.ready(id, st));
+    if (ev === 'served') { served++; pendingEvents.push({ kind: 'served', key: t.order.key, label: t.order.label }); }
+    if (ev === 'spoiled') { remakes++; pendingEvents.push({ kind: 'spoiled', key: t.order.key, label: t.order.label }); }
+  }
+  document.getElementById('s-served').textContent = served;
+  document.getElementById('s-remake').textContent = remakes;
+  renderTickets();
+  renderCrew();
+}
+
+function renderTickets() {
+  const host = document.getElementById('tickets');
+  const open = tickets.filter((t) => !t.done);
+  document.getElementById('s-open').textContent = open.length;
+  document.getElementById('s-work').textContent = crew.flies.filter((f) => f.ticket).length;
+  if (!tickets.length) { host.innerHTML = '<p class="empty">No orders. Place one at the order desk.</p>'; return; }
+  host.innerHTML = '';
+  for (const t of tickets.slice().reverse().slice(0, 12)) {
+    const el = document.createElement('div');
+    el.className = 'ticket ' + (t.done ? 'served' : t.spoiled ? 'spoiled' : 'working');
+    const pct = t.done ? 100 : Math.round((t.step / RECIPE.length) * 100);
+    const step = currentStep(t);
+    el.innerHTML = `<div class="ticket-top">
+        <span class="ticket-id">${t.id}</span>
+        <span class="ticket-stage">${stageLabel(t)}${t.remakes ? ` · ${t.remakes} remake${t.remakes > 1 ? 's' : ''}` : ''}</span>
+      </div>
+      <div class="ticket-label">${t.order.label}</div>
+      <div class="ticket-stage">${step ? `${STATION[step.station].label} · ${t.crew.length}/${step.crew} crew${t.idle > 2 ? ` · waiting ${t.idle}` : ''}` : 'done'}</div>
+      <div class="ticket-bar"><i style="width:${pct}%"></i></div>`;
+    host.appendChild(el);
+  }
+}
+
+function renderCrew() {
+  const host = document.getElementById('crew');
+  host.innerHTML = '';
+  for (const f of crew.flies) {
+    const el = document.createElement('div');
+    el.className = 'crew-row';
+    const what = f.ticket
+      ? `${STATION[f.target].label} · ${f.arrived ? (f.willing ? 'working' : 'waiting on its brain') : 'on the way'}`
+      : 'idle';
+    el.innerHTML = `<span class="crew-id">${f.id}</span>
+      <span class="crew-what">${what}</span>
+      <span class="crew-hz ${f.willing ? 'on' : ''}">${f.readoutHz.toFixed(0)} Hz</span>`;
+    host.appendChild(el);
+  }
+}
+
+// ---------------------------------------------------------------- controls
+document.getElementById('pause').onclick = (e) => {
+  paused = !paused;
+  e.target.classList.toggle('on', paused);
+  e.target.textContent = paused ? 'Resume' : 'Pause';
+};
+document.getElementById('lesion').onclick = (e) => {
+  crew.lesioned = !crew.lesioned;
+  e.target.classList.toggle('on', crew.lesioned);
+};
+document.getElementById('spin').onclick = (e) => {
+  brain.spin = !brain.spin;
+  e.target.classList.toggle('on', brain.spin);
+};
+document.getElementById('scramble').onclick = (e) => {
+  const on = !e.target.classList.contains('on');
+  co.topology.scramble(on);
+  e.target.classList.toggle('on', on);
+};
+document.getElementById('tabs').onclick = (e) => {
+  const b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  for (const x of document.querySelectorAll('#tabs button')) x.classList.toggle('active', x === b);
+  for (const body of document.querySelectorAll('[data-body]')) body.hidden = body.dataset.body !== b.dataset.tab;
+};
+
+// ---------------------------------------------------------------- loop
+function resize() {
+  for (const [canvas, rend, cam] of [[kcanvas, krend, kcam]]) {
+    const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
+    rend.setSize(w, h, false);
+    cam.aspect = w / h; cam.updateProjectionMatrix();
+  }
+  brain.resize();
+}
+addEventListener('resize', resize);
+
+let last = performance.now(), fps = 0;
+const khud = document.getElementById('khud'), bhud = document.getElementById('bhud');
+
+function frame() {
+  requestAnimationFrame(frame);
+  const now = performance.now();
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  fps += (1 / Math.max(dt, 1e-4) - fps) * 0.08;
+
+  if (!paused) {
+    crew.step(dt, now / 1000);
+    tickAcc += dt;
+    if (tickAcc >= TICK_EVERY) { tickAcc -= TICK_EVERY; pipelineTick(); }
+  }
+
+  // light the brain from every fly's spikes this frame
+  const pts = [];
+  for (const f of crew.flies) {
+    for (const r of f.spiked) { const p = rowToPoint[r]; if (p >= 0) pts.push(p); }
+  }
+  if (pts.length) brain.fire(pts, 1);
+
+  // bodies
+  const t = now / 1000;
+  if (!paused) stepAmbient(dt, t);
+  const busyAt = {};
+  for (const f of crew.flies) {
+    const m = flyMeshes[f.id];
+    const speed = Math.hypot(f.vel.x, f.vel.z);
+    // hover bob, faster and shallower the harder she is working
+    const bob = Math.sin(t * (4 + f.airborne * 5) + (m.userData.seed || 0)) * (0.04 + f.airborne * 0.05);
+    m.position.set(f.pos.x, 0.5 + f.airborne * 0.75 + bob, f.pos.z);
+
+    // bank into the turn: compare where she is pointing with where she is going
+    let turn = Math.atan2(f.vel.x, f.vel.z) - m.rotation.y;
+    while (turn > Math.PI) turn -= Math.PI * 2;
+    while (turn < -Math.PI) turn += Math.PI * 2;
+    m.userData.bank = (m.userData.bank || 0) + (turn * 34 * f.airborne - (m.userData.bank || 0)) * 0.12;
+
+    m.rotation.y += (Math.atan2(f.vel.x, f.vel.z) - m.rotation.y) * (speed > 0.1 ? 0.14 : 0.04);
+    animateSimpleFly(m, t, {
+      bank: Math.max(-38, Math.min(38, m.userData.bank)),
+      pitch: -Math.min(16, speed * 4.5),      // nose down as she picks up speed
+    });
+    if (f.target && f.arrived) busyAt[f.target] = (busyAt[f.target] || 0) + 1;
+  }
+  for (const s of STATIONS) {
+    const st = stationMesh[s.id];
+    const busy = busyAt[s.id] || 0;
+    st.ring.material.opacity = 0.28 + (busy ? 0.55 : 0) * (0.7 + Math.sin(t * 3) * 0.3);
+    st.vessel.position.y = 0.36 + (busy ? Math.sin(t * 6) * 0.03 : 0);
+    if (st._busy !== busy) { st._busy = busy; drawLabel(s.id, busy); }
+  }
+
+  // the handi rides with the crew from layering onward
+  const carried = tickets.find((x) => !x.done && x.step >= 3);
+  if (carried) {
+    const step = currentStep(carried);
+    const st = STATION[step.station];
+    handi.visible = true;
+    handi.position.set(st.pos[0], 0.72 + Math.sin(t * 2) * 0.03, st.pos[1]);
+  } else handi.visible = false;
+
+  // meters
+  let simT = 0, spikes = 0;
+  for (const [name, m] of Object.entries(meterEls)) {
+    const row = co.readoutRow[name];
+    let hz = 0;
+    for (const f of crew.flies) if (row !== undefined) hz = Math.max(hz, f.brain.rate[row]);
+    m.smooth += (hz - m.smooth) * 0.2;
+    m.val.textContent = `${m.smooth.toFixed(0)} Hz`;
+    m.bar.style.width = `${Math.min(100, m.smooth / 1.2)}%`;
+  }
+  for (const f of crew.flies) { simT = Math.max(simT, f.brain.t); spikes += f.brain.spikeCount; }
+  document.getElementById('s-sim').textContent = (simT / 1000).toFixed(1);
+  document.getElementById('s-spikes').textContent = spikes.toLocaleString();
+
+  krend.render(kscene, kcam);
+  brain.render(dt, { pathSpeed: 0.25 });
+
+  khud.innerHTML = `<b>${fps.toFixed(0)}</b> fps &middot; <b>${CREW_SIZE}</b> flies,
+    one shared connectome &middot; pipeline tick every <b>${TICK_EVERY}</b>s
+    ${paused ? '&middot; <b>PAUSED</b>' : ''}${crew.lesioned ? ' &middot; <b>LESIONED</b>' : ''}`;
+  bhud.innerHTML = `<b>${co.topology.n}</b> neurons &middot; <b>${co.topology.m.toLocaleString()}</b> synapses
+    &middot; <b>${mappedRows}</b> with a soma here &middot; drag to orbit`;
+}
+
+// Everything on one handle, for the console. Flymap does the same with `nona`.
+globalThis.kitchen = { brain, co, crew, tickets, stationMesh, scene: kscene, camera: kcam, renderer: krend, ambient };
+
+resize();
+renderTickets();
+renderCrew();
+bus.send(MSG.HELLO, { role: 'kitchen' });
+frame();
+</script>
+</body>
+</html>

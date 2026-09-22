@@ -1,0 +1,10 @@
+# Five borrowed codebases used as reference while building this. They are other
+# people's work, 374 MB, and not ours to redistribute. The teardowns in
+# Mainproject/reference-analysis/ record what was learned from them, and
+# CLAUDE.md indexes which file to look at for what.
+References/
+
+.DS_Store
+.qodo/
+node_modules/
+*.log
