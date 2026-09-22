@@ -8,3 +8,7 @@ References/
 .qodo/
 node_modules/
 *.log
+recordings/
+
+# raw capture frames from tools/shoot.mjs
+Mainproject/.shoot/

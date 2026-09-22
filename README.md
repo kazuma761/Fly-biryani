@@ -1,17 +1,19 @@
 # Fly Biryani
 
-A fruit-fly biryani restaurant, run by a real *Drosophila* connectome in your browser.
+**A fruit-fly biryani restaurant, run by a real *Drosophila* connectome in your browser.**
 
 Flies take orders on a phone, then cook a Dum Biryani across six kitchen stations — and every
 tick of work is gated by an actual fly brain, simulated live from Janelia's MaleCNS v1.0
 connectome.
 
+![The kitchen floor](Mainproject/docs/media/floor.gif)
+
 ```bash
 cd Mainproject && python3 serve.py
 ```
 
-Then open **http://localhost:8080/orders.html**, build an order, and click **Kitchen** to watch
-it get cooked.
+Open **http://localhost:8080/orders.html**, build an order, then click **Kitchen** to watch it
+get cooked.
 
 ```bash
 cd Mainproject && node verify.mjs      # 29 checks, no test framework
@@ -22,22 +24,66 @@ everything else is local, so after the first load it runs with the wifi off.
 
 ---
 
-## Two pages, one restaurant
+## How the signal actually flows
 
-| Page | What happens |
-|---|---|
-| **Order desk** | A fly at a phone. You build an order; she smells it as a sparse Kenyon-cell code and has a feeling about it. Placing it dispatches that code to the kitchen. |
-| **Kitchen** | Six flies work the pipeline — marination → parboiled rice → sweets → layering the handi → dum sealing → packing — with the brain running live underneath. |
+Two circuits. One decides what to cook; the other decides whether a fly is able to work at all.
 
-The order **is** the Kenyon-cell code. A menu choice becomes a sparse pattern of ~24 active
-cells out of 400, and that pattern is what gets dispatched, so the kitchen flies smell the order
+![Neuron flow diagram](Mainproject/docs/media/neuron-flow.svg)
+
+**Solid boxes are measured cells from the connectome. Dashed boxes are engineered or stand-ins.**
+That distinction is the whole point of the diagram — it shows exactly where the real biology
+stops and the scaffolding begins.
+
+---
+
+## The two pages
+
+### Order desk
+
+<img src="Mainproject/docs/media/desk.jpg" width="100%" alt="A fly at a phone taking a biryani order">
+
+A fly at a phone. You pick protein, style, spice and side; she smells it as a sparse
+Kenyon-cell code and has a feeling about it. Placing the order dispatches that code to the
+kitchen.
+
+**The order *is* the Kenyon-cell code.** A menu choice becomes a sparse pattern of ~24 active
+cells out of 400, and that pattern is what gets sent — so the kitchen flies smell the order
 rather than parse JSON.
 
-## What is real
+<img src="Mainproject/docs/media/smell.gif" width="420" alt="The Kenyon-cell code changing as the order changes">
 
-The connectome is **MaleCNS v1.0** (FlyEM/HHMI Janelia + Google Research, CC BY 4.0):
-**150 neurons and 2,224 synaptic connections** with measured contact counts, across four traced
-sensory→motor routes.
+Change the order and the code changes with it. Same order in, same cells out, every time.
+
+### Kitchen floor
+
+<img src="Mainproject/docs/media/kitchen.jpg" width="100%" alt="Six flies working the kitchen, with the live brain beside it">
+
+Six flies work the pipeline — marination → parboiled rice → sweets → layering the handi →
+dum sealing → packing — with 124,314 somas rendered live underneath.
+
+| Station | What happens | Crew |
+|---|---|---|
+| Marination | meat, yoghurt and spices resting | 1 |
+| Rice Boiler | basmati to 70%; left unattended on the flame it breaks | 1 |
+| Sweets & Dessert | double ka meetha to the side, birista and mint on top | 1 |
+| Layering Handi | marinade down, rice over, aromatics last | 2 |
+| Dum Sealing | dough-sealed lid, low flame | 2 |
+| Packing & QC | handi to the counter, raita cup, ticket tagged | 1 |
+
+---
+
+## Watching the brain
+
+<img src="Mainproject/docs/media/brain.jpg" width="100%" alt="124,314 soma point cloud of the fly brain">
+
+Every point is a real cell body. It flares when that neuron spikes. The glow is additive
+blending rather than a bloom pass — that is what holds 60 fps at 124k points.
+
+### Pathway traces
+
+![Sugar to MN9 pathway trace](Mainproject/docs/media/pathway.gif)
+
+Four traced sensory→motor routes, drawn as real morphology:
 
 | Route | From | To | Measured |
 |---|---|---|---|
@@ -46,16 +92,42 @@ sensory→motor routes.
 | water | LB3a_R | DNg67_R | 19 ms |
 | looming | LC4_R | DNp01 — the giant fibre, escape | 27 ms |
 
-**The brain is on the control path, not beside it.** A fly does not work a station because a
-timer said so. Arriving at the rice boiler drives that fly's real LB3a water cells; about 25 ms
-of simulated time later DNg67 fires, and *that firing* is what commits a tick of work.
+**Timing is measured; travel is drawn.** Each cell lights at the millisecond it actually first
+fired. The run *along* the branch is interpolation — the model's neurons are points with no
+internal geometry — and the panel says so on screen.
 
-Silence the sensory cells and the flies still fly to their stations and then stand there. The
-intact kitchen serves a ticket in 930 frames; the lesioned one never leaves the first station
-and fires zero spikes. Both are assertions in `verify.mjs`, and **Lesion sensory cells** is a
-button in the running app.
+---
+
+## The brain is on the control path, not beside it
+
+A fly does not work a station because a timer said so. Arriving at the rice boiler drives that
+fly's real LB3a water cells; about 25 ms of simulated time later DNg67 fires, and *that firing*
+is what commits a tick of work.
+
+### The control that proves it
+
+<img src="Mainproject/docs/media/lesion.jpg" width="100%" alt="The kitchen stalled after lesioning the sensory cells">
+
+Press **Lesion sensory cells** and the flies still fly to their stations — and then stand there.
+
+| | Intact | Lesioned |
+|---|---|---|
+| Ticket served | yes, in 930 frames | never |
+| Furthest station reached | packing | marination |
+| Spikes fired | 22,221 | **0** |
+
+Both are assertions in `verify.mjs`, and the button is in the running app.
 
 Calibrated by sweep: sugar reaches MN9 at **26 ms simulated against 27 ms measured**.
+
+### Other controls, shipped rather than scripted
+
+- **Scramble wiring** — a degree-preserving shuffle. Every neuron keeps its out-degree and its
+  weights; only the partners change. What survives that is not structure.
+- **Pathway trace** — watch one route light up cell by cell at its measured latencies.
+- **Forget everything** — restores the naive circuit exactly.
+
+---
 
 ## What is not real, and is labelled as such
 
@@ -73,13 +145,12 @@ Calibrated by sweep: sugar reaches MN9 at **26 ms simulated against 27 ms measur
 - **Navigation is steering, not neural.** These are reflex arcs, not a central-complex heading
   system, so there is no ring attractor here to steer with. The brain decides *whether* work
   happens; ordinary steering decides *how* a fly gets there.
-- **In the pathway traces, timing is measured and travel is drawn.** Each cell lights at the
-  millisecond it actually first fired. The run *along* the branch is interpolation — the model's
-  neurons are points with no internal geometry. The panel says so on screen.
 - **66 of the 150 neurons have no soma in the point cloud.** A labellar taste cell or an
   olfactory receptor neuron keeps its cell body out in the labellum or antenna, outside the
   brain volume, and sends only its axon in. That is anatomy, not a loading failure, and the UI
   says which.
+
+---
 
 ## It is a flow, not a game
 
@@ -90,13 +161,18 @@ Progress is gated **physically, never by a timeout** — a fly has arrived when 
 speed agree, and rice left unattended on a live flame spoils because nobody came to take it off,
 not because a counter expired.
 
-## The controls are shipped, not scripted
+## Two levels of fly
 
-- **Lesion sensory cells** — the flies fly to their stations and stand there.
-- **Scramble wiring** — a degree-preserving shuffle. Every neuron keeps its out-degree and its
-  weights; only the partners change. What survives that is not structure.
-- **Pathway trace** — watch one route light up cell by cell at its measured latencies.
-- **Forget everything** — restores the naive circuit exactly.
+`createFly` builds the full rig: ~70 meshes, every joint independent, so on the order desk she
+tips her head at the phone, grooms her forelegs every few seconds and breathes.
+
+`createSimpleFly` bakes the rest pose into one merged geometry and keeps only the wings
+separate, so it draws in three calls instead of seventy. The kitchen floor uses it for all ten
+flies, because a fly there is about thirty pixels tall and leg articulation is smaller than a
+pixel.
+
+Ten rigged flies came to **664 draw calls and 23 fps**. The same scene with baked flies and
+shared materials is **65 draw calls at 60 fps**.
 
 ## Layout
 
@@ -119,6 +195,7 @@ Mainproject/
 
   data/            MaleCNS v1.0 geometry and traced pathways (CC BY 4.0)
   assets/fly/      NeuroMechFly body, Apache-2.0 (see NOTICE)
+  tools/           dev-only capture rig used to make the media above
 
   reference-analysis/   teardowns of the projects this borrows technique from
 CLAUDE.md          full build context, decisions and the bugs worth not repeating
